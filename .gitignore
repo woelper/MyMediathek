@@ -1,0 +1,6 @@
+/target
+tests/snapshots/*.new.png
+tests/snapshots/*.diff.png
+tests/snapshots/*.old.png
+.DS_Store
+.claude/

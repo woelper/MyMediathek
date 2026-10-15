@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=MyMediathek
+Comment=Search the public broadcasters' media libraries and watch offline
+Comment[de]=Sendungen aus den Mediatheken suchen und offline anschauen
+Exec=mymediathek
+Icon=mymediathek
+Terminal=false
+Categories=AudioVideo;Video;Player;
+Keywords=mediathek;ard;zdf;arte;video;download;
+StartupWMClass=mymediathek

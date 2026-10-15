@@ -1,0 +1,137 @@
+name: release
+
+# Build macOS / Linux / Windows artifacts on tag push (v*) and attach them to
+# the GitHub release for that tag. Started by hand, it only builds and keeps
+# the artifacts on the run, to try the pipeline without publishing anything.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            target: macos-arm64
+          - os: ubuntu-latest
+            target: linux-x86_64
+          - os: windows-latest
+            target: windows-x86_64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libasound2-dev libxkbcommon-dev \
+            libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libgtk-3-dev
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build
+        run: cargo build --release --locked
+
+      # The player and HLS downloads need ffmpeg and ffprobe. Linux users get
+      # them from their distribution; on macOS and Windows they ship with the
+      # app, which looks next to itself first.
+      - name: Fetch ffmpeg (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          mkdir -p ffmpeg
+          url=$(curl -sfIL -o /dev/null -w '%{url_effective}' \
+            https://ffmpeg.martin-riedl.de/redirect/latest/macos/arm64/release/ffmpeg.zip)
+          for tool in ffmpeg ffprobe; do
+            curl -sfL -o "$RUNNER_TEMP/$tool.zip" "${url%/*}/$tool.zip"
+            unzip -o -q "$RUNNER_TEMP/$tool.zip" -d ffmpeg
+          done
+          ffmpeg/ffmpeg -version | head -1
+
+      - name: Bundle (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          cargo install cargo-bundle --locked
+          ./bundle.sh ffmpeg
+
+      # After bundle.sh, never before: its ad-hoc signature would replace the
+      # real one.
+      - name: Sign and notarise (macOS)
+        if: runner.os == 'macOS'
+        uses: ./.github/actions/macos-sign
+        with:
+          app-path: target/release/bundle/osx/MyMediathek.app
+          certificate-p12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
+          certificate-password: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          team-id: ${{ secrets.MACOS_TEAM_ID }}
+          api-key-p8: ${{ secrets.MACOS_API_KEY_P8 }}
+          api-key-id: ${{ secrets.MACOS_API_KEY_ID }}
+          api-issuer-id: ${{ secrets.MACOS_API_ISSUER_ID }}
+
+      - name: Package (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          # ditto preserves the code signature, the extended attributes and
+          # the stapled notarisation ticket; zip drops the last of those.
+          ditto -c -k --keepParent target/release/bundle/osx/MyMediathek.app \
+            MyMediathek-${{ matrix.target }}.zip
+
+      - name: Package (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          mkdir -p dist/mymediathek
+          cp target/release/mymediathek dist/mymediathek/
+          cp assets/linux/mymediathek.desktop install-linux.sh dist/mymediathek/
+          cp assets/icon-256.png dist/mymediathek/mymediathek.png
+          tar -czf MyMediathek-${{ matrix.target }}.tar.gz -C dist mymediathek
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $zip = "$env:RUNNER_TEMP\ffmpeg.zip"
+          Invoke-WebRequest -Uri https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n9.0-latest-win64-lgpl-shared-9.0.zip -OutFile $zip
+          Expand-Archive $zip -DestinationPath "$env:RUNNER_TEMP\ffmpeg"
+          $bin = Get-ChildItem "$env:RUNNER_TEMP\ffmpeg\*\bin" | Select-Object -First 1
+          New-Item -ItemType Directory -Force dist\MyMediathek | Out-Null
+          Copy-Item target\release\mymediathek.exe dist\MyMediathek\MyMediathek.exe
+          Copy-Item "$bin\ffmpeg.exe", "$bin\ffprobe.exe", "$bin\*.dll" dist\MyMediathek\
+          Compress-Archive -Path dist\MyMediathek -DestinationPath MyMediathek-${{ matrix.target }}.zip
+
+      - name: Keep artifacts (manual run)
+        if: github.ref_type != 'tag'
+        uses: actions/upload-artifact@v4
+        with:
+          name: MyMediathek-${{ matrix.target }}
+          path: |
+            MyMediathek-*.zip
+            MyMediathek-*.tar.gz
+
+      # release.sh puts AI-generated release notes into the annotated tag's
+      # message body; use them as the GitHub release body.
+      - name: Extract release notes from tag annotation
+        if: github.ref_type == 'tag'
+        shell: bash
+        run: |
+          git fetch --force --no-tags origin \
+            "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"
+          git tag -l --format='%(contents:body)' "$GITHUB_REF_NAME" \
+            > "$RUNNER_TEMP/release-notes.md"
+
+      - name: Attach to release
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ github.ref_name }}
+          body_path: ${{ runner.temp }}/release-notes.md
+          files: |
+            MyMediathek-*.zip
+            MyMediathek-*.tar.gz
