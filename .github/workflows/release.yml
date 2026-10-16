@@ -48,10 +48,11 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           mkdir -p ffmpeg
-          url=$(curl -sfIL -o /dev/null -w '%{url_effective}' \
-            https://ffmpeg.martin-riedl.de/redirect/latest/macos/arm64/release/ffmpeg.zip)
+          # Pinned: the site's "latest" redirect fails every few requests.
+          # Newer builds are listed on https://ffmpeg.martin-riedl.de
+          base=https://ffmpeg.martin-riedl.de/download/macos/arm64/1789931890_9.0.2
           for tool in ffmpeg ffprobe; do
-            curl -sfL -o "$RUNNER_TEMP/$tool.zip" "${url%/*}/$tool.zip"
+            curl -sfL --retry 5 --retry-all-errors -o "$RUNNER_TEMP/$tool.zip" "$base/$tool.zip"
             unzip -o -q "$RUNNER_TEMP/$tool.zip" -d ffmpeg
           done
           ffmpeg/ffmpeg -version | head -1
@@ -92,7 +93,7 @@ jobs:
           # BtbN's builds are made against an old glibc, so they run on any
           # current distribution. Their libraries are found through RPATH,
           # pointed at lib/ beside the binaries.
-          curl -sfL https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n9.0-latest-linux64-lgpl-shared-9.0.tar.xz \
+          curl -sfL --retry 5 --retry-all-errors https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n9.0-latest-linux64-lgpl-shared-9.0.tar.xz \
             | tar -xJ -C "$RUNNER_TEMP"
           ff=$(echo "$RUNNER_TEMP"/ffmpeg-*/)
           cp "$ff"/bin/ffmpeg "$ff"/bin/ffprobe dist/mymediathek/
