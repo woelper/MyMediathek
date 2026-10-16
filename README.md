@@ -16,10 +16,7 @@ The search uses the [MediathekViewWeb](https://github.com/mediathekview/mediathe
 
 ## Download
 
-Ready-made builds for macOS (Apple Silicon), Windows and Linux are on the [releases page](https://github.com/woelper/MyMediathek/releases).
-
-- **macOS and Windows:** ffmpeg is included.
-- **Linux:** install ffmpeg from your distribution (`sudo apt install ffmpeg`), unpack the tarball and run `./install-linux.sh` to add MyMediathek to the app menu.
+Ready-made builds for macOS (Apple Silicon), Windows and Linux are on the [releases page](https://github.com/woelper/MyMediathek/releases). They include ffmpeg, so there's nothing else to install. On Linux, unpack the tarball and run `./install-linux.sh` to add MyMediathek to the app menu.
 
 ## Building
 
@@ -37,4 +34,4 @@ The tests run with `cargo test --release`. Tests that need the network or a GPU 
 
 ## Licences
 
-The fonts are IBM Plex (SIL Open Font License, see `assets/fonts/LICENSE.txt`). The release builds bundle ffmpeg from [martin-riedl.de](https://ffmpeg.martin-riedl.de) (macOS) and [BtbN/FFmpeg-Builds](https://github.com/BtbN/FFmpeg-Builds) (Windows). ffmpeg is licensed under the LGPL/GPL, and its source code is available at [ffmpeg.org](https://ffmpeg.org).
+The fonts are IBM Plex (SIL Open Font License, see `assets/fonts/LICENSE.txt`). The release builds bundle ffmpeg from [martin-riedl.de](https://ffmpeg.martin-riedl.de) (macOS) and [BtbN/FFmpeg-Builds](https://github.com/BtbN/FFmpeg-Builds) (Windows and Linux). ffmpeg is licensed under the LGPL/GPL, and its source code is available at [ffmpeg.org](https://ffmpeg.org).
